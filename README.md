@@ -1,229 +1,101 @@
-# Stock Analysis Tool Documentation
+# Stock Analysis Tool
 
-## Overview
+A powerful stock analysis tool that combines market data from Polygon.io with Google Trends search data to identify potential trading opportunities. This tool analyzes pre-market activity, gap-up percentages, and search trend changes to help identify stocks with significant movement potential.
 
-This tool combines market data from Polygon.io and search trends from Google Trends to analyze stocks and identify potential trading opportunities. It supports both real-time analysis and historical backtesting.
+## Features
 
-## Table of Contents
-- [Installation](#installation)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-- [Examples](#examples)
-- [Troubleshooting](#troubleshooting)
+- Combined analysis using both market data and search trends
+- Pre-market volume analysis
+- Gap-up percentage calculation
+- Market capitalization filtering
+- Google Trends hourly analysis (4-6 AM PST)
+- Customizable filtering criteria
+- Excel report generation with conditional formatting
+- Colored console logging
+- Concurrent processing with rate limiting
+- Trading calendar aware (handles holidays and market closures)
+
+## Prerequisites
+
+- Python 3.8+
+- Polygon.io API key
+- SERP API key (for Google Trends data)
 
 ## Installation
-
-### Prerequisites
-- Python 3.7 or higher
-- Polygon.io API key
-- SERP API key (for Google Trends)
-
-### Setup
 
 1. Clone the repository:
 ```bash
 git clone https://github.com/concaption/new-stock-backtesting.git
-cd stock-analysis-tool
+cd new-stock-backtesting
 ```
 
-2. Install dependencies:
+2. Install required packages:
 ```bash
 pip install -r requirements.txt
 ```
 
 3. Set up environment variables:
 ```bash
-# Create .env file
 cp .env.example .env
+```
 
-# Edit .env file with your API keys
+Edit the `.env` file and add your API keys:
+```
 POLYGON_API_KEY=your_polygon_api_key
 SERPAPI_KEY=your_serp_api_key
 ```
 
 4. Create required directories:
 ```bash
-mkdir -p data logs output
+mkdir -p data output logs
 ```
 
-### Project Structure
-```
-stock-analysis-tool/
-├── src/
-│   ├── __init__.py
-│   ├── trading_calendar.py
-│   ├── polygon.py
-│   ├── google_trends.py
-│   ├── excel_handler.py
-│   └── combined_analyzer.py
-├── data/
-│   └── holidays.csv
-├── logs/
-├── output/
-├── main.py
-├── requirements.txt
-└── README.md
-```
-
-## Configuration
-
-### holidays.csv Format
-```csv
-Date,Market Status,Description
-2024-01-01,Closed,New Year's Day
-2024-01-15,Closed,Martin Luther King Jr. Day
-2024-02-19,Closed,Presidents Day
-```
-
-### Analysis Parameters
-- `MIN_PREMARKET_VOLUME`: Minimum premarket trading volume (default: 50,000)
-- `MIN_PRICE`: Minimum stock price (default: $3)
-- `MIN_GAP_UP`: Minimum gap up percentage (default: 2%)
-- `MIN_MARKET_CAP`: Minimum market capitalization (default: $100M)
+5. Add the holidays.csv file to the data directory with required fields:
+- Date (YYYY-MM-DD format)
+- Market Status (Closed/Early Close)
 
 ## Usage
 
-### Command Line Interface
+### Basic Analysis
 
-1. Single Stock Analysis
+Analyze a single stock:
 ```bash
-# Basic analysis
 python main.py analyze --ticker AAPL
-
-# Custom parameters
-python main.py analyze --ticker AAPL \
-    --min-trends-change 75 \
-    --min-market-cap 1B \
-    --min-gap-up 3
 ```
 
-2. Multiple Stock Analysis
+Analyze multiple stocks from a JSON file:
 ```bash
-# Using JSON file
 python main.py analyze --ticker-file tickers.json
-
-# Custom output directory
-python main.py analyze --ticker-file tickers.json --output-dir ./results
 ```
 
-3. Backtesting
+### Analysis Options
+
+- `--date`: Analysis date (YYYY-MM-DD). Defaults to today
+- `--min-trends-change`: Minimum Google Trends change percentage (default: 50.0)
+- `--min-premarket-volume`: Minimum premarket volume (default: 50000)
+- `--min-price`: Minimum stock price (default: 3.0)
+- `--min-gap-up`: Minimum gap up percentage (default: 2.0)
+- `--min-market-cap`: Minimum market cap (can use B/M suffix, e.g., 100M)
+- `--trends-only`: Only perform Google Trends analysis
+- `--polygon-only`: Only perform Polygon analysis
+- `--batch-size`: Number of concurrent requests (default: 5)
+- `--verbose`: Increase verbosity level (-v or -vv)
+
+Example with custom parameters:
 ```bash
-# Basic backtest
-python main.py backtest \
-    --ticker AAPL \
-    --start-date 2024-01-01 \
-    --end-date 2024-01-15
-
-# Advanced backtest
-python main.py backtest \
-    --ticker AAPL \
-    --start-date 2024-01-01 \
-    --end-date 2024-01-15 \
-    --min-trends-change 75 \
-    --min-gap-up 3 \
-    --batch-size 10
+python main.py analyze --ticker AAPL --min-trends-change 75 --min-gap-up 3 --min-market-cap 1B -v
 ```
 
-4. Analysis Modes
-```bash
-# Only Google Trends analysis
-python main.py analyze --ticker AAPL --trends-only
+## Output
 
-# Only market data analysis
-python main.py analyze --ticker AAPL --polygon-only
-```
+The tool generates:
+1. Excel files with analysis results in the `output` directory
+2. Detailed logs in the `logs` directory
+3. Console output with color-coded status messages
 
-### Common Options
-- `--date`: Analysis date (YYYY-MM-DD)
-- `--min-trends-change`: Minimum Google Trends change percentage
-- `--min-premarket-volume`: Minimum premarket volume
-- `--min-price`: Minimum stock price
-- `--min-gap-up`: Minimum gap up percentage
-- `--min-market-cap`: Minimum market cap (supports M/B notation)
-- `--output-dir`: Directory for output files
-- `--batch-size`: Number of concurrent requests
-- `-v/--verbose`: Increase verbosity level
+### Excel Output Format
 
-## API Documentation
-
-### TradingCalendar
-```python
-from src.trading_calendar import TradingCalendar
-
-calendar = TradingCalendar()
-is_trading = calendar.is_trading_day(date)
-last_day = calendar.get_last_trading_day(current_date)
-```
-
-### GoogleTrendsAnalyzer
-```python
-from src.google_trends import GoogleTrendsAnalyzer
-
-analyzer = GoogleTrendsAnalyzer(trading_calendar)
-results = await analyzer.analyze_trends(session, ticker, date)
-```
-
-### PolygonAPI
-```python
-from src.polygon import PolygonAPI
-
-api = PolygonAPI(api_key)
-data = await api.get_daily_open_close(session, ticker, date)
-```
-
-### CombinedAnalyzer
-```python
-from src.combined_analyzer import CombinedAnalyzer
-
-analyzer = CombinedAnalyzer(polygon_analyzer, trends_analyzer)
-results = await analyzer.analyze_stocks(tickers, date)
-```
-
-## Examples
-
-### 1. Basic Stock Analysis
-```python
-import asyncio
-from src.combined_analyzer import CombinedAnalyzer
-
-async def analyze_stock():
-    results = await analyzer.analyze_stocks(
-        tickers=["AAPL"],
-        date=datetime.now(),
-        min_trends_change=50.0
-    )
-    return results
-
-results = asyncio.run(analyze_stock())
-```
-
-### 2. Custom Analysis Parameters
-```python
-params = {
-    "min_trends_change": 75.0,
-    "min_premarket_volume": 100000,
-    "min_gap_up": 3.0,
-    "min_market_cap": 1_000_000_000
-}
-
-results = await analyzer.analyze_stocks(tickers, date, **params)
-```
-
-### 3. Backtesting Example
-```python
-backtest_results = await analyzer.backtest(
-    tickers=["AAPL"],
-    start_date=datetime(2024, 1, 1),
-    end_date=datetime(2024, 1, 15)
-)
-```
-
-## Output Formats
-
-### 1. Excel Output
-The tool generates Excel files with the following columns:
+The Excel output includes:
 - Date
 - Ticker
 - Company Name
@@ -235,57 +107,54 @@ The tool generates Excel files with the following columns:
 - Close Price
 - Open to High %
 - Open to Close %
-- Trends Change %
-- 4-5 AM Change %
-- 5-6 AM Change %
 
-### 2. Console Output
+Positive and negative percentage values are highlighted in green and red respectively.
+
+## Project Structure
+
 ```
-Google Trends Results:
-AAPL:
-  Total Change: 75.50%
-  4-5 AM Change: 25.30%
-  5-6 AM Change: 15.20%
-
-Market Data Results:
-AAPL (Apple Inc.):
-  Premarket Volume: 1,234,567
-  Gap Up: 2.50%
-  Market Cap: $3,000,000,000,000
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. API Key Issues
-```
-Error: POLYGON_API_KEY environment variable not set
-Solution: Ensure API key is set in .env file
+├── src/
+│   ├── combined_analyzer.py   # Main analysis logic
+│   ├── excel_handler.py       # Excel file generation
+│   ├── google_trends.py       # Google Trends analysis
+│   ├── logger_config.py       # Logging configuration
+│   ├── polygon.py            # Polygon.io API interface
+│   └── trading_calendar.py   # Market calendar management
+├── data/
+│   └── holidays.csv          # Market holidays data
+├── logs/                     # Log files directory
+├── output/                   # Analysis results
+├── main.py                   # CLI interface
+├── requirements.txt          # Dependencies
+└── README.md                 # This file
 ```
 
-2. Holiday Data Issues
-```
-Error: Invalid or missing holidays.csv file
-Solution: Verify holidays.csv exists and has correct format
-```
+## Limitations
 
-3. Rate Limiting
-```
-Error: API request failed: Rate limit exceeded
-Solution: Adjust batch_size parameter or add delay between requests
-```
-
-### Logging
-
-- Default log location: `logs/stock_analyzer_YYYYMMDD_HHMMSS.log`
-- Verbosity levels:
-  - Normal: Warnings and errors
-  - `-v`: Info level (adds progress updates)
-  - `-vv`: Debug level (adds detailed API interactions)
+- SERP API rate limits apply to Google Trends analysis
+- Polygon.io API rate limits apply to market data retrieval
+- Historical data availability depends on your Polygon.io subscription level
+- Pre-market data might be limited for some stocks
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Polygon.io for market data
+- SERP API for Google Trends data
+- Click for CLI interface
+- OpenPyXL for Excel handling
+
+## Author
+
+@concaption - January 2025
