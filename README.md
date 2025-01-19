@@ -2,6 +2,8 @@
 
 A powerful stock analysis tool that combines market data from Polygon.io with Google Trends search data to identify potential trading opportunities. This tool analyzes pre-market activity, gap-up percentages, and search trend changes to help identify stocks with significant movement potential.
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/concaption/new-stock-backtesting)
+
 ## Features
 
 - Combined analysis using both market data and search trends
@@ -129,13 +131,6 @@ Positive and negative percentage values are highlighted in green and red respect
 └── README.md                 # This file
 ```
 
-## Limitations
-
-- SERP API rate limits apply to Google Trends analysis
-- Polygon.io API rate limits apply to market data retrieval
-- Historical data availability depends on your Polygon.io subscription level
-- Pre-market data might be limited for some stocks
-
 ## Contributing
 
 1. Fork the repository
@@ -143,10 +138,6 @@ Positive and negative percentage values are highlighted in green and red respect
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
