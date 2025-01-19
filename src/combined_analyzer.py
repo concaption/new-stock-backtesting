@@ -66,7 +66,9 @@ class CombinedAnalyzer:
         batch_size: int = 5
     ) -> Dict:
         """
-        Perform combined analysis using both services
+        Perform analysis using both services, either independently or combined.
+        For combined analysis, only checks trends for stocks meeting market criteria.
+        For independent analysis, checks all stocks for each service.
         
         Args:
             tickers: List of tickers to analyze
@@ -97,30 +99,10 @@ class CombinedAnalyzer:
                 return results
 
             async with aiohttp.ClientSession() as session:
-                # Step 1: Google Trends Analysis
-                if not polygon_only:
-                    logger.info("Starting Google Trends analysis...")
-                    trends_results = await self.trends.analyze_multiple_tickers(
-                        tickers,
-                        date_obj,
-                        min_trends_change,
-                        batch_size
-                    )
-                    results["trends_results"] = trends_results
-
-                    if trends_results:
-                        logger.info(f"Found {len(trends_results)} tickers with significant trends changes")
-                        trending_tickers = [result["ticker"] for result in trends_results]
-                        tickers = trending_tickers if not trends_only else []
-                    else:
-                        logger.info("No tickers met the trends criteria")
-                        return results
-
-                # Step 2: Polygon Market Data Analysis
-                if not trends_only and tickers:
+                # Step 1: Polygon Market Data Analysis
+                if not trends_only:
                     logger.info("Starting Polygon market data analysis...")
                     polygon_results = []
-                    
                     for ticker in tickers:
                         try:
                             result = await self.polygon.analyze_stock(
@@ -133,39 +115,56 @@ class CombinedAnalyzer:
                         except Exception as e:
                             logger.error(f"Error analyzing {ticker} with Polygon: {str(e)}")
                             continue
-
+                    
                     results["polygon_results"] = polygon_results
                     logger.info(f"Found {len(polygon_results)} tickers meeting market criteria")
 
-                    # Step 3: Combine Results if both analyses were performed
-                    if not polygon_only and trends_results:
-                        for p_result in polygon_results:
-                            t_result = next(
-                                (r for r in trends_results if r["ticker"] == p_result.ticker),
-                                None
-                            )
-                            if t_result:
-                                combined_result = {
-                                    "ticker": p_result.ticker,
-                                    "company_name": p_result.company_name,
-                                    "date": date_obj.strftime("%Y-%m-%d"),
-                                    # Market data
-                                    "premarket_volume": p_result.premarket_volume,
-                                    "gap_up": p_result.gap_up,
-                                    "market_cap": p_result.market_cap,
-                                    "open_price": p_result.open_price,
-                                    "high_price": p_result.high_price,
-                                    "close_price": p_result.close_price,
-                                    "open_to_high": p_result.open_to_high,
-                                    "open_to_close": p_result.open_to_close,
-                                    # Trends data
-                                    "trends_change": t_result["total_change"],
-                                    "trends_4_to_5": t_result["hour_4_to_5_change"],
-                                    "trends_5_to_6": t_result["hour_5_to_6_change"]
-                                }
-                                results["combined_results"].append(combined_result)
+                # Step 2: Google Trends Analysis
+                if not polygon_only:
+                    # For a combined analysis (not running independently), only check trends for stocks that met market criteria
+                    trends_tickers = tickers
+                    if not trends_only and not polygon_only and polygon_results:
+                        trends_tickers = [result.ticker for result in polygon_results]
+                    
+                    logger.info("Starting Google Trends analysis...")
+                    trends_results = await self.trends.analyze_multiple_tickers(
+                        trends_tickers,
+                        date_obj,
+                        min_trends_change,
+                        batch_size
+                    )
+                    results["trends_results"] = trends_results
+                    logger.info(f"Found {len(trends_results)} tickers with significant trends changes")
 
-                        logger.info(f"Found {len(results['combined_results'])} tickers meeting all criteria")
+                # Step 3: Combine results only if both analyses were performed
+                if not trends_only and not polygon_only and polygon_results and trends_results:
+                    for p_result in polygon_results:
+                        t_result = next(
+                            (r for r in trends_results if r["ticker"] == p_result.ticker),
+                            None
+                        )
+                        if t_result:
+                            combined_result = {
+                                "ticker": p_result.ticker,
+                                "company_name": p_result.company_name,
+                                "date": date_obj.strftime("%Y-%m-%d"),
+                                # Market data
+                                "premarket_volume": p_result.premarket_volume,
+                                "gap_up": p_result.gap_up,
+                                "market_cap": p_result.market_cap,
+                                "open_price": p_result.open_price,
+                                "high_price": p_result.high_price,
+                                "close_price": p_result.close_price,
+                                "open_to_high": p_result.open_to_high,
+                                "open_to_close": p_result.open_to_close,
+                                # Trends data
+                                "trends_change": t_result["total_change"],
+                                "trends_4_to_5": t_result["hour_4_to_5_change"],
+                                "trends_5_to_6": t_result["hour_5_to_6_change"]
+                            }
+                            results["combined_results"].append(combined_result)
+
+                    logger.info(f"Found {len(results['combined_results'])} tickers meeting all criteria")
 
         except Exception as e:
             logger.error(f"Error in combined analysis: {str(e)}")

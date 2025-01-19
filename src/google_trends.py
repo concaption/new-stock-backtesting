@@ -68,18 +68,26 @@ class GoogleTrendsAnalyzer:
 
     def get_date_range(self, target_date: Union[datetime, date]) -> str:
         """
-        Get the date range string for the API request
+        Get the date range string for the API request with hour precision.
+        Uses hour-based format required for hourly data.
         
         Args:
             target_date: The target date to analyze
             
         Returns:
-            str: Formatted date range string
+            str: Formatted date range string in yyyy-mm-ddThh format
         """
-        end_date = self._convert_to_date(target_date)
-        start_date = end_date - timedelta(days=7)
+        end_date = self._convert_to_datetime(target_date)
+        # Get 7 days before
+        start_date = end_date - timedelta(days=6)
         
-        return f"{start_date.strftime('%Y-%m-%d')} {end_date.strftime('%Y-%m-%d')}"
+        # Format with hours for hourly data
+        # End at 23:00 of target date to get full day data
+        end_str = end_date.replace(hour=23).strftime('%Y-%m-%dT%H')
+        # Start at 00:00 of start date
+        start_str = start_date.replace(hour=0).strftime('%Y-%m-%dT%H')
+        
+        return f"{start_str} {end_str}"
 
     async def fetch_trends_data(
         self,
@@ -104,12 +112,11 @@ class GoogleTrendsAnalyzer:
             params = {
                 "engine": "google_trends",
                 "q": keyword,
-                "geo": "US",  # Specifically for USA
                 "data_type": "TIMESERIES",
                 "date": date_range,
-                "cat": "7",  # Finance category
                 "api_key": self.api_key,
-                "tz": "480"  # PST (UTC-8)
+                "tz": "480",  # PST (UTC-8)
+                "granular": "hourly"
             }
 
             logger.debug(f"Fetching trends data for {keyword} with params: {params}")

@@ -233,9 +233,27 @@ def analyze(
             filename = output_path / f"analysis_{date.strftime('%Y%m%d')}.xlsx"
             excel_handler.save(str(filename))
             click.echo(f"\nResults saved to {filename}")
-
+        
+        if results["polygon_results"]:
+            # excel_handler = ExcelHandler()
+            # excel_handler.add_stock_data(results["polygon_results"], date.strftime("%Y-%m-%d"))
+            # filename = output_path / f"polygon_{date.strftime('%Y%m%d')}.xlsx"
+            # excel_handler.save(str(filename))
+            click.echo("\nMarket Data Results:")
+            for result in results["polygon_results"]:
+                click.echo(f"\n{result.ticker} ({result.company_name}):")
+                click.echo(f"  Premarket Volume: {result.premarket_volume:,.0f}")
+                click.echo(f"  Gap Up: {result.gap_up:.2f}%")
+                click.echo(f"  Market Cap: ${result.market_cap:,.2f}")
+                click.echo(f"  Open to High: {result.open_to_high:.2f}%")
+                click.echo(f"  Open to Close: {result.open_to_close:.2f}%")
+    
         # Print results
         if results["trends_results"]:
+            # excel_handler = ExcelHandler()
+            # excel_handler.add_stock_data(results["trends_results"], date.strftime("%Y-%m-%d"))
+            # filename = output_path / f"trends_{date.strftime('%Y%m%d')}.xlsx"
+            # excel_handler.save(str(filename))
             click.echo("\nGoogle Trends Results:")
             for result in results["trends_results"]:
                 click.echo(f"\n{result['ticker']}:")
@@ -245,15 +263,7 @@ def analyze(
                 if result['hour_5_to_6_change']:
                     click.echo(f"  5-6 AM Change: {result['hour_5_to_6_change']:.2f}%")
 
-        if results["polygon_results"]:
-            click.echo("\nMarket Data Results:")
-            for result in results["polygon_results"]:
-                click.echo(f"\n{result.ticker} ({result.company_name}):")
-                click.echo(f"  Premarket Volume: {result.premarket_volume:,.0f}")
-                click.echo(f"  Gap Up: {result.gap_up:.2f}%")
-                click.echo(f"  Market Cap: ${result.market_cap:,.2f}")
-                click.echo(f"  Open to High: {result.open_to_high:.2f}%")
-                click.echo(f"  Open to Close: {result.open_to_close:.2f}%")
+        
 
         if not any([results["trends_results"], results["polygon_results"]]):
             click.echo("\nNo stocks found matching criteria")
@@ -262,150 +272,150 @@ def analyze(
         logger.error(f"Analysis failed: {str(e)}", exc_info=verbose > 1)
         raise click.ClickException(str(e))
 
-@cli.command()
-@click.option('--start-date',
-              required=True,
-              callback=validate_date,
-              help='Start date for backtesting (YYYY-MM-DD)')
-@click.option('--end-date',
-              required=True,
-              callback=validate_date,
-              help='End date for backtesting (YYYY-MM-DD)')
-@click.option('--ticker',
-              required=True,
-              help='Stock ticker to analyze')
-@click.option('--min-trends-change',
-              default=50.0,
-              callback=validate_percentage,
-              help='Minimum Google Trends change percentage')
-@click.option('--min-premarket-volume',
-              default=MIN_PREMARKET_VOLUME,
-              callback=validate_volume,
-              help='Minimum premarket volume')
-@click.option('--min-price',
-              default=MIN_PRICE,
-              type=float,
-              help='Minimum stock price')
-@click.option('--min-gap-up',
-              default=MIN_GAP_UP,
-              callback=validate_percentage,
-              help='Minimum gap up percentage')
-@click.option('--min-market-cap',
-              default=str(MIN_MARKET_CAP),
-              callback=validate_market_cap,
-              help='Minimum market cap (can use B/M suffix, e.g., 100M)')
-@click.option('--output-dir',
-              type=click.Path(),
-              default='output',
-              help='Directory for output files')
-@click.option('--batch-size',
-              default=5,
-              type=int,
-              help='Number of concurrent requests')
-@click.option('--verbose', '-v',
-              count=True,
-              help='Increase verbosity')
-def backtest(
-    start_date: datetime,
-    end_date: datetime,
-    ticker: str,
-    min_trends_change: float,
-    min_premarket_volume: float,
-    min_price: float,
-    min_gap_up: float,
-    min_market_cap: float,
-    output_dir: str,
-    batch_size: int,
-    verbose: int
-):
-    """Perform backtesting analysis over a date range"""
-    try:
-        # Initialize logging
-        initialize_logging(verbose, output_dir)
-        logger.debug("Starting backtest with parameters: %s", locals())
+# @cli.command()
+# @click.option('--start-date',
+#               required=True,
+#               callback=validate_date,
+#               help='Start date for backtesting (YYYY-MM-DD)')
+# @click.option('--end-date',
+#               required=True,
+#               callback=validate_date,
+#               help='End date for backtesting (YYYY-MM-DD)')
+# @click.option('--ticker',
+#               required=True,
+#               help='Stock ticker to analyze')
+# @click.option('--min-trends-change',
+#               default=50.0,
+#               callback=validate_percentage,
+#               help='Minimum Google Trends change percentage')
+# @click.option('--min-premarket-volume',
+#               default=MIN_PREMARKET_VOLUME,
+#               callback=validate_volume,
+#               help='Minimum premarket volume')
+# @click.option('--min-price',
+#               default=MIN_PRICE,
+#               type=float,
+#               help='Minimum stock price')
+# @click.option('--min-gap-up',
+#               default=MIN_GAP_UP,
+#               callback=validate_percentage,
+#               help='Minimum gap up percentage')
+# @click.option('--min-market-cap',
+#               default=str(MIN_MARKET_CAP),
+#               callback=validate_market_cap,
+#               help='Minimum market cap (can use B/M suffix, e.g., 100M)')
+# @click.option('--output-dir',
+#               type=click.Path(),
+#               default='output',
+#               help='Directory for output files')
+# @click.option('--batch-size',
+#               default=5,
+#               type=int,
+#               help='Number of concurrent requests')
+# @click.option('--verbose', '-v',
+#               count=True,
+#               help='Increase verbosity')
+# def backtest(
+#     start_date: datetime,
+#     end_date: datetime,
+#     ticker: str,
+#     min_trends_change: float,
+#     min_premarket_volume: float,
+#     min_price: float,
+#     min_gap_up: float,
+#     min_market_cap: float,
+#     output_dir: str,
+#     batch_size: int,
+#     verbose: int
+# ):
+#     """Perform backtesting analysis over a date range"""
+#     try:
+#         # Initialize logging
+#         initialize_logging(verbose, output_dir)
+#         logger.debug("Starting backtest with parameters: %s", locals())
 
-        # Validate environment and files
-        if not os.getenv("POLYGON_API_KEY"):
-            raise click.UsageError("POLYGON_API_KEY environment variable not set")
-        if not os.getenv("SERPAPI_KEY"):
-            raise click.UsageError("SERPAPI_KEY environment variable not set")
-        if not validate_holidays_csv():
-            raise click.UsageError("Invalid or missing holidays.csv file")
+#         # Validate environment and files
+#         if not os.getenv("POLYGON_API_KEY"):
+#             raise click.UsageError("POLYGON_API_KEY environment variable not set")
+#         if not os.getenv("SERPAPI_KEY"):
+#             raise click.UsageError("SERPAPI_KEY environment variable not set")
+#         if not validate_holidays_csv():
+#             raise click.UsageError("Invalid or missing holidays.csv file")
 
-        # Ensure output directory exists
-        output_path = ensure_output_dir(output_dir)
+#         # Ensure output directory exists
+#         output_path = ensure_output_dir(output_dir)
 
-        # Initialize components
-        trading_calendar = TradingCalendar()
-        polygon_api = PolygonAPI(os.getenv("POLYGON_API_KEY"))
-        polygon_analyzer = StockAnalyzer(polygon_api, trading_calendar)
-        trends_analyzer = GoogleTrendsAnalyzer(trading_calendar)
-        combined_analyzer = CombinedAnalyzer(polygon_analyzer, trends_analyzer)
+#         # Initialize components
+#         trading_calendar = TradingCalendar()
+#         polygon_api = PolygonAPI(os.getenv("POLYGON_API_KEY"))
+#         polygon_analyzer = StockAnalyzer(polygon_api, trading_calendar)
+#         trends_analyzer = GoogleTrendsAnalyzer(trading_calendar)
+#         combined_analyzer = CombinedAnalyzer(polygon_analyzer, trends_analyzer)
 
-        # Run backtesting
-        click.echo(f"\nStarting backtesting for {ticker} from {start_date.date()} to {end_date.date()}")
-        results = asyncio.run(combined_analyzer.backtest(
-            tickers=[ticker.upper()],
-            start_date=start_date,
-            end_date=end_date,
-            min_trends_change=min_trends_change,
-            min_premarket_volume=min_premarket_volume,
-            min_price=min_price,
-            min_gap_up=min_gap_up,
-            min_market_cap=min_market_cap,
-            batch_size=batch_size
-        ))
+#         # Run backtesting
+#         click.echo(f"\nStarting backtesting for {ticker} from {start_date.date()} to {end_date.date()}")
+#         results = asyncio.run(combined_analyzer.backtest(
+#             tickers=[ticker.upper()],
+#             start_date=start_date,
+#             end_date=end_date,
+#             min_trends_change=min_trends_change,
+#             min_premarket_volume=min_premarket_volume,
+#             min_price=min_price,
+#             min_gap_up=min_gap_up,
+#             min_market_cap=min_market_cap,
+#             batch_size=batch_size
+#         ))
 
-        if not results:
-            click.echo("No matching results found during the backtest period")
-            return
+#         if not results:
+#             click.echo("No matching results found during the backtest period")
+#             return
 
-        # Save results
-        excel_handler = ExcelHandler()
-        filename = output_path / f"backtest_{ticker}_{start_date.date()}_{end_date.date()}.xlsx"
+#         # Save results
+#         excel_handler = ExcelHandler()
+#         filename = output_path / f"backtest_{ticker}_{start_date.date()}_{end_date.date()}.xlsx"
         
-        for result in results:
-            excel_handler.add_stock_data([result], result['date'])
+#         for result in results:
+#             excel_handler.add_stock_data([result], result['date'])
         
-        excel_handler.save(str(filename))
-        click.echo(f"\nBacktest results saved to {filename}")
+#         excel_handler.save(str(filename))
+#         click.echo(f"\nBacktest results saved to {filename}")
 
-        # Print summary statistics
-        click.echo("\nBacktest Summary:")
-        total_days = (end_date - start_date).days + 1
-        click.echo(f"Total days analyzed: {total_days}")
-        click.echo(f"Days with matching criteria: {len(results)}")
+#         # Print summary statistics
+#         click.echo("\nBacktest Summary:")
+#         total_days = (end_date - start_date).days + 1
+#         click.echo(f"Total days analyzed: {total_days}")
+#         click.echo(f"Days with matching criteria: {len(results)}")
         
-        if results:
-            # Calculate statistics
-            total_gap_up = sum(r['gap_up'] for r in results)
-            avg_gap_up = total_gap_up / len(results)
-            total_trends_change = sum(r['trends_change'] for r in results)
-            avg_trends_change = total_trends_change / len(results)
-            avg_volume = sum(r['premarket_volume'] for r in results) / len(results)
+#         if results:
+#             # Calculate statistics
+#             total_gap_up = sum(r['gap_up'] for r in results)
+#             avg_gap_up = total_gap_up / len(results)
+#             total_trends_change = sum(r['trends_change'] for r in results)
+#             avg_trends_change = total_trends_change / len(results)
+#             avg_volume = sum(r['premarket_volume'] for r in results) / len(results)
             
-            # Calculate success rates
-            profitable_trades = sum(1 for r in results if r['open_to_close'] > 0)
-            success_rate = (profitable_trades / len(results)) * 100
+#             # Calculate success rates
+#             profitable_trades = sum(1 for r in results if r['open_to_close'] > 0)
+#             success_rate = (profitable_trades / len(results)) * 100
             
-            # Print statistics
-            click.echo(f"\nAverage Statistics:")
-            click.echo(f"  Gap Up: {avg_gap_up:.2f}%")
-            click.echo(f"  Trends Change: {avg_trends_change:.2f}%")
-            click.echo(f"  Premarket Volume: {avg_volume:,.0f}")
-            click.echo(f"  Success Rate: {success_rate:.1f}%")
+#             # Print statistics
+#             click.echo(f"\nAverage Statistics:")
+#             click.echo(f"  Gap Up: {avg_gap_up:.2f}%")
+#             click.echo(f"  Trends Change: {avg_trends_change:.2f}%")
+#             click.echo(f"  Premarket Volume: {avg_volume:,.0f}")
+#             click.echo(f"  Success Rate: {success_rate:.1f}%")
             
-            # Print best performing day
-            best_day = max(results, key=lambda x: x['open_to_close'])
-            click.echo(f"\nBest Performing Day:")
-            click.echo(f"  Date: {best_day['date']}")
-            click.echo(f"  Open to Close: {best_day['open_to_close']:.2f}%")
-            click.echo(f"  Gap Up: {best_day['gap_up']:.2f}%")
-            click.echo(f"  Trends Change: {best_day['trends_change']:.2f}%")
+#             # Print best performing day
+#             best_day = max(results, key=lambda x: x['open_to_close'])
+#             click.echo(f"\nBest Performing Day:")
+#             click.echo(f"  Date: {best_day['date']}")
+#             click.echo(f"  Open to Close: {best_day['open_to_close']:.2f}%")
+#             click.echo(f"  Gap Up: {best_day['gap_up']:.2f}%")
+#             click.echo(f"  Trends Change: {best_day['trends_change']:.2f}%")
 
-    except Exception as e:
-        logger.error(f"Backtesting failed: {str(e)}", exc_info=verbose > 1)
-        raise click.ClickException(str(e))
+#     except Exception as e:
+#         logger.error(f"Backtesting failed: {str(e)}", exc_info=verbose > 1)
+#         raise click.ClickException(str(e))
 
 if __name__ == "__main__":
     cli()
