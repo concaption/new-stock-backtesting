@@ -4,7 +4,8 @@ author: @concaption
 date: 2025-01-15
 
 This is the main CLI script that combines Polygon.io and Google Trends analysis.
-It provides a command-line interface to analyze stocks using both market data and search trends.
+It provides a command-line interface to analyze stocks using both market data and search trends,
+with support for parallel processing of date ranges.
 """
 
 import os
@@ -39,7 +40,7 @@ def initialize_logging(verbose: int, output_dir: str = "logs"):
         2: logging.DEBUG     # -vv
     }
     console_level = levels.get(verbose, logging.DEBUG)
-    
+
     setup_logging(
         console_level=console_level,
         file_level=logging.DEBUG,
@@ -50,18 +51,18 @@ def initialize_logging(verbose: int, output_dir: str = "logs"):
 def validate_date(ctx, param, value):
     """Validate date format and check if it's a trading day"""
     if value is None:
-        value = datetime.now().strftime("%Y-%m-%d")
+        return None
     try:
         date_obj = datetime.strptime(value, "%Y-%m-%d")
         calendar = TradingCalendar()
         if not calendar.is_trading_day(date_obj.date()):
-            raise click.BadParameter(f"{value} is not a trading day. Please select a valid trading day.")
+            raise click.BadParameter(f"{value} is not a trading day")
         return date_obj
     except ValueError:
         raise click.BadParameter("Date must be in YYYY-MM-DD format")
 
 def validate_market_cap(ctx, param, value):
-    """Validate and convert market cap notation (e.g., 1B, 500M)"""
+    """Validate and convert market cap notation"""
     try:
         if isinstance(value, str):
             value = value.upper()
@@ -75,7 +76,7 @@ def validate_market_cap(ctx, param, value):
             raise ValueError
         return value
     except ValueError:
-        raise click.BadParameter("Invalid market cap format. Use a number or shorthand (e.g., 100M, 1B)")
+        raise click.BadParameter("Invalid market cap format")
 
 def validate_percentage(ctx, param, value):
     """Validate percentage values"""
@@ -111,7 +112,13 @@ def cli():
 @cli.command()
 @click.option('--date', 
               callback=validate_date,
-              help='Analysis date (YYYY-MM-DD). Defaults to today.')
+              help='Analysis date (YYYY-MM-DD)')
+@click.option('--start-date', callback=validate_date,
+              help='Start date for range analysis (YYYY-MM-DD)')
+@click.option('--end-date', callback=validate_date,
+              help='End date for range analysis (YYYY-MM-DD)')
+@click.option('--max-parallel', default=5, type=int,
+              help='Maximum number of parallel date analyses')
 @click.option('--ticker', 
               help='Stock ticker to analyze.')
 @click.option('--ticker-file',
@@ -136,11 +143,11 @@ def cli():
 @click.option('--min-market-cap',
               default=str(MIN_MARKET_CAP),
               callback=validate_market_cap,
-              help='Minimum market cap (can use B/M suffix, e.g., 100M).')
+              help='Minimum market cap')
 @click.option('--trends-only', 
               is_flag=True,
               help='Only perform Google Trends analysis.')
-@click.option('--polygon-only', 
+@click.option('--polygon-only',
               is_flag=True,
               help='Only perform Polygon analysis.')
 @click.option('--output-dir',
@@ -155,7 +162,10 @@ def cli():
               count=True,
               help='Increase verbosity level.')
 def analyze(
-    date: datetime,
+    date: Optional[datetime],
+    start_date: Optional[datetime],
+    end_date: Optional[datetime],
+    max_parallel: int,
     ticker: str,
     ticker_file: str,
     min_trends_change: float,
@@ -171,10 +181,17 @@ def analyze(
 ):
     """Analyze stocks using both Polygon.io and Google Trends data"""
     try:
-        # Initialize logging
+        # Initialize logging and validate environment
         initialize_logging(verbose, output_dir)
         logger.debug("Starting analysis with parameters: %s", locals())
         
+        # Validate date inputs
+        if date and (start_date or end_date):
+            raise click.UsageError("Cannot specify both single date and date range")
+        if (start_date and not end_date) or (end_date and not start_date):
+            raise click.UsageError("Must specify both start-date and end-date for range analysis")
+        if start_date and end_date and start_date > end_date:
+            raise click.UsageError("start-date must be before end-date")
         # Validate environment
         if not trends_only and not os.getenv("POLYGON_API_KEY"):
             raise click.UsageError("POLYGON_API_KEY environment variable not set")
@@ -190,11 +207,10 @@ def analyze(
         elif ticker_file:
             try:
                 with open(ticker_file, 'r') as f:
-                    data = json.load(f)[0].get('json').get('tickers')
-                    if isinstance(data, list):
-                        tickers = [t['ticker'] for t in data if 'ticker' in t]
-                    else:
-                        tickers = [data['ticker']]
+                    data = json.load(f)[0].get('json', {}).get('tickers', [])
+                    if not data:
+                        raise click.UsageError("No tickers found in file")
+                    tickers = [t['ticker'] for t in data if 'ticker' in t]
             except Exception as e:
                 logger.error(f"Error reading ticker file: {e}")
                 raise click.UsageError(f"Error reading ticker file: {e}")
@@ -211,62 +227,100 @@ def analyze(
         trends_analyzer = GoogleTrendsAnalyzer(trading_calendar)
         combined_analyzer = CombinedAnalyzer(polygon_analyzer, trends_analyzer)
 
-        # Run analysis
-        click.echo("Starting analysis...")
-        results = asyncio.run(combined_analyzer.analyze_stocks(
-            tickers=tickers,
-            date_param=date,
-            min_trends_change=min_trends_change,
-            min_premarket_volume=min_premarket_volume,
-            min_price=min_price,
-            min_gap_up=min_gap_up,
-            min_market_cap=min_market_cap,
-            trends_only=trends_only,
-            polygon_only=polygon_only,
-            batch_size=batch_size
-        ))
+        # Generate dates to analyze
+        dates_to_analyze = []
+        if start_date and end_date:
+            current = start_date
+            while current <= end_date:
+                if trading_calendar.is_trading_day(current.date()):
+                    dates_to_analyze.append(current)
+                current += timedelta(days=1)
+        elif date:
+            dates_to_analyze = [date]
+        else:
+            dates_to_analyze = [datetime.now()]
 
-        # Save results
-        if results["combined_results"]:
-            excel_handler = ExcelHandler()
-            excel_handler.add_stock_data(results["combined_results"], date.strftime("%Y-%m-%d"))
-            filename = output_path / f"analysis_{date.strftime('%Y%m%d')}.xlsx"
-            excel_handler.save(str(filename))
-            click.echo(f"\nResults saved to {filename}")
-        
-        if results["polygon_results"]:
-            # excel_handler = ExcelHandler()
-            # excel_handler.add_stock_data(results["polygon_results"], date.strftime("%Y-%m-%d"))
-            # filename = output_path / f"polygon_{date.strftime('%Y%m%d')}.xlsx"
-            # excel_handler.save(str(filename))
-            click.echo("\nMarket Data Results:")
-            for result in results["polygon_results"]:
-                click.echo(f"\n{result.ticker} ({result.company_name}):")
-                click.echo(f"  Premarket Volume: {result.premarket_volume:,.0f}")
-                click.echo(f"  Gap Up: {result.gap_up:.2f}%")
-                click.echo(f"  Market Cap: ${result.market_cap:,.2f}")
-                click.echo(f"  Open to High: {result.open_to_high:.2f}%")
-                click.echo(f"  Open to Close: {result.open_to_close:.2f}%")
-    
-        # Print results
-        if results["trends_results"]:
-            # excel_handler = ExcelHandler()
-            # excel_handler.add_stock_data(results["trends_results"], date.strftime("%Y-%m-%d"))
-            # filename = output_path / f"trends_{date.strftime('%Y%m%d')}.xlsx"
-            # excel_handler.save(str(filename))
-            click.echo("\nGoogle Trends Results:")
-            for result in results["trends_results"]:
-                click.echo(f"\n{result['ticker']}:")
-                click.echo(f"  Total Change: {result['total_change']:.2f}%")
-                if result['hour_4_to_5_change']:
-                    click.echo(f"  4-5 AM Change: {result['hour_4_to_5_change']:.2f}%")
-                if result['hour_5_to_6_change']:
-                    click.echo(f"  5-6 AM Change: {result['hour_5_to_6_change']:.2f}%")
+        click.echo(f"Analyzing {len(dates_to_analyze)} trading days...")
 
-        
+        async def analyze_single_date(date_param: datetime, semaphore: asyncio.Semaphore):
+            try:
+                async with semaphore:
+                    logger.info(f"Analyzing date: {date_param.strftime('%Y-%m-%d')}")
+                    results = await combined_analyzer.analyze_stocks(
+                        tickers=tickers,
+                        date_param=date_param,
+                        min_trends_change=min_trends_change,
+                        min_premarket_volume=min_premarket_volume,
+                        min_price=min_price,
+                        min_gap_up=min_gap_up,
+                        min_market_cap=min_market_cap,
+                        trends_only=trends_only,
+                        polygon_only=polygon_only,
+                        batch_size=batch_size
+                    )
+                    return date_param, results
+            except Exception as e:
+                logger.error(f"Error analyzing {date_param.strftime('%Y-%m-%d')}: {str(e)}")
+                return date_param, None
 
-        if not any([results["trends_results"], results["polygon_results"]]):
-            click.echo("\nNo stocks found matching criteria")
+        async def run_parallel_analysis():
+            semaphore = asyncio.Semaphore(max_parallel)
+            tasks = [analyze_single_date(d, semaphore) for d in dates_to_analyze]
+            return await asyncio.gather(*tasks)
+
+        # Run parallel analysis
+        all_results = asyncio.run(run_parallel_analysis())
+
+        # Process results
+        total_combined = 0
+        total_polygon = 0
+        total_trends = 0
+
+        for date_param, results in all_results:
+            if not results:
+                continue
+
+            date_str = date_param.strftime("%Y-%m-%d")
+            
+            # Save combined results
+            if results["combined_results"]:
+                total_combined += len(results["combined_results"])
+                excel_handler = ExcelHandler()
+                excel_handler.add_stock_data(results["combined_results"], date_str)
+                filename = output_path / f"analysis_{date_str}"
+                excel_handler.save(str(filename))
+                click.echo(f"Results for {date_str} saved to {filename}")
+
+            # Print market data results
+            if results["polygon_results"]:
+                total_polygon += len(results["polygon_results"])
+                click.echo(f"\nMarket Data Results for {date_str}:")
+                for result in results["polygon_results"]:
+                    click.echo(f"\n{result.ticker} ({result.company_name}):")
+                    click.echo(f"  Premarket Volume: {result.premarket_volume:,.0f}")
+                    click.echo(f"  Gap Up: {result.gap_up:.2f}%")
+                    click.echo(f"  Market Cap: ${result.market_cap:,.2f}")
+                    click.echo(f"  Open to High: {result.open_to_high:.2f}%")
+                    click.echo(f"  Open to Close: {result.open_to_close:.2f}%")
+
+            # Print trends results
+            if results["trends_results"]:
+                total_trends += len(results["trends_results"])
+                click.echo(f"\nGoogle Trends Results for {date_str}:")
+                for result in results["trends_results"]:
+                    click.echo(f"\n{result['ticker']}:")
+                    click.echo(f"  Total Change: {result['total_change']:.2f}%")
+                    if result['hour_4_to_5_change']:
+                        click.echo(f"  4-5 AM Change: {result['hour_4_to_5_change']:.2f}%")
+                    if result['hour_5_to_6_change']:
+                        click.echo(f"  5-6 AM Change: {result['hour_5_to_6_change']:.2f}%")
+
+        # Print summary
+        click.echo("\nAnalysis Summary:")
+        click.echo(f"Total days analyzed: {len(dates_to_analyze)}")
+        click.echo(f"Combined results found: {total_combined}")
+        click.echo(f"Market data results found: {total_polygon}")
+        click.echo(f"Trends results found: {total_trends}")
 
     except Exception as e:
         logger.error(f"Analysis failed: {str(e)}", exc_info=verbose > 1)

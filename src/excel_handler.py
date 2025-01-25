@@ -6,6 +6,7 @@ date: 2025-01-15
 This module handles the creation and formatting of Excel files for stock analysis results. It provides a class `ExcelHandler` that initializes a new workbook, sets up headers, adds stock data, and saves the Excel file with a timestamp in the output folder.
 
 """
+import os
 from datetime import datetime
 from typing import List
 from openpyxl import Workbook
@@ -118,5 +119,6 @@ class ExcelHandler:
         if date_str is None:
             date_str = datetime.now().strftime("%Y-%m-%d")
         filename = f"output/stock_analysis_{date_str}.xlsx"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         self.workbook.save(filename)
         return filename
